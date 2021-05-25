@@ -1,0 +1,142 @@
+---
+title: "USA Driver Accidents"
+author: "Vedant Sagar"
+date: "5/19/2021"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning = FALSE, results = FALSE, fig.dim = c(8, 6))
+library(tidyverse)
+library(tidytext)
+library(lubridate)
+source("../../scripts/viridis.R")
+source("../../scripts/ggprob.R")
+```
+
+## **Introduction**
+
+Road transport is the most popular mode of transportation in the United States. Be it within a neighborhood or across state lines, Americans drive everywhere. With a scattered railway system in cities like New York and Chicago, it is safe to say that Americans are heavily dependent on road transport. Despite this, road accidents claimed the lives of _ Americans in 2012. This project is aimed at analyzing the number of accidents and fatalities that occurred for all 50 states (and the District of Columbia) in the year 2012.
+
+## **Data**
+
+Compiling data for this project was probably the most challenging aspect. I used the website run by The *National Highway Traffic Safety Administration* (NHTSA), more specifically the *Traffic Safety Facts 2012* journal^[https://crashstats.nhtsa.dot.gov/Api/Public/ViewPublication/812032]. I used the index to pick the right data sets for this project. That said, I have only used a fraction of the journal data for this project. I hope to use more in the future as I unravel newer statistical concepts and more interesting ideas.
+
+I have uploaded all the csv files I created from the journal, making the data used in this project 100% reproducible.
+
+## **Analysis**
+
+```{r reading_data}
+
+df1 <- read_delim("../../data/state_col.csv", " ")
+df2 <- read_delim("../../data/lic_drv.csv", " ")
+df3 <- read_delim("../../data/fat_drv.csv", " ")
+df4 <- read_delim("../../data/reg_veh.csv", " ")
+df5 <- read_delim("../../data/fat_reg_veh.csv", " ")
+df6 <- read_delim("../../data/pop.csv", " ")
+df7 <- read_delim("../../data/pop_fat.csv", " ")
+df8 <- read_delim("../../data/tot_kill.csv", " ")
+df9 <- cbind(df1, df2, df3, df4, df5, df6, df7, df8)
+df10 <- read_delim("../../data/drv_data.csv", " ")
+driver_data <- tibble(rbind(df9, df10))
+```
+
+The driver_data tibble is drawn from Table 110 in the journal. It contains 51 entries (one for each state + DC) and 8 columns: 
+
+1. **state**: 2 letter abbriviation of each state name.
+2. **lic_drv**: number of licensed drivers (in thousands) in that state
+3. **fat_drv**: number of fatalities per 100,000 drivers
+4. **reg_veh**: number of registered vehicles (in thousands)
+5. **fat_reg_veh**: number of fatalities per 100,000 registered vehicles
+6. **pop**: state population (in thousands)
+7. **pop_fat**: fatalities per 100,000 of state population
+8. **tot_kill**: total number of deaths in that state
+
+*all data is from 2012*
+
+```{r}
+df11 <- driver_data %>% 
+  rename(
+    num_drivers = lic_drv,
+    num_vehicles = reg_veh,
+    total_pop = pop,
+    total_fatalities = tot_kill
+  ) %>% 
+  select(state, num_drivers, num_vehicles, total_pop, total_fatalities) 
+```
+
+I plan to analyze the **top ten US states with the most dangerous road traffic in 2012**. I will define *most dangerous* as a combination of most fatal and most reckless. I am analyzing the US states with the highest number of road causilities. (I will analyze reckless at a latter date when I revisit this project.)  
+
+```{r}
+df12 <- df11 %>%
+  slice_max(n = 10, order_by = total_fatalities)
+
+df13 <- df11 %>%
+  slice_max(n = 10, order_by = total_pop)
+
+df14 <- df11 %>%
+  slice_max(n = 10, order_by = num_drivers)
+```
+
+```{r}
+ggplot(df12, aes(reorder(state, -total_fatalities), total_fatalities)) + 
+  geom_col(fill = "#F2A960") + 
+  xlab("States") + 
+  ylab("Number of Deaths") + 
+  ggtitle("Figure 1. Top 10 States with Highest Number of Fatalities")
+```
+
+Figure 1. Takes a look at the states with the highest number of deaths. Here we see the state of Texas having the most number of deaths followed by California and Florida which are a close second and third respectively. However, Philadelphia in 4th place has a much lesser death total than the top 3. From 4th onwards, the trend decreases slowly implying the number of deaths by road accidents is more or less constant with little variability.  
+
+```{r}
+ggplot(df12, aes(total_fatalities)) + 
+  geom_density(color = "blue") + 
+  xlab("Number of Deaths") + 
+  ylab("Density of deaths") + 
+  ggtitle("Figure 2. Denisty of the Number of Deaths")
+```
+
+Figure 2. verifies this trend by showing us an increased density of number of deaths near the 1000 mark, and then a steep decline after about 1200. We see a small increase in the density of deaths around the 2200 mark which could show the impact of FL, CA, and TX. 
+
+However, looking just at the total number of road accident deaths does not tell us the full story. TX, CA, and FL are among the most populous states in the US. Thus, it seems logical that these three states will have the highest number of deaths.
+
+```{r}
+ggplot(df13, aes(reorder(state, -total_pop), total_pop)) +
+  geom_col(fill = "#60AEF2") + 
+  xlab("States") + 
+  ylab("Total population (in thousands)") + 
+  ggtitle("Figure 3. Top 10 Most Populous States", "Measured in Thousands")
+```
+
+Figure 3. Shows the ten most populous states in the US. Here we see a clear relation between the number of deaths per state (as is expected). However, this measure isn't entirely accurate as this assume that the same share of the population gets a driver's license in every state. 
+
+```{r}
+ggplot(df14, aes(reorder(state, -num_drivers), num_drivers)) + 
+  geom_col(fill = "#64E6A4") + 
+  xlab("States") + 
+  ylab("Total Number of Licenses issues (in thousands)") + 
+  ggtitle("Figure 4. Top 10 States with the highest number of drivers", "Measured in Thousands")
+```
+
+Figure 4. is the most accurate measurement of population for our study. Here we see that CA, TX, and FL have the most number of licenses issued. We can use this measurement to generate a ratio of driver fatalities for our data in the future.  
+
+```{r}
+anti_join(df12, df14) %>% 
+  pull(state)
+
+anti_join(df14, df12) %>% 
+  pull(state)
+```
+
+
+## **Interpretation**
+
+*As this project is ongoing, I cannot draw concrete conclusions from it. I can interpret certain data trends, and this section summarizes those trends.*
+
+Figure 1. showcased the states with the highest number of road accident deaths. This number is raw, and un weighed with the population of the state. Weighing it with the population is imperative, and something that cannot be ignored.
+
+Figure 2. is a density plot that better explains the density of the downward trend shown in the bar graph. This density can prove to be very important, and can be generalized to each bar graph.
+
+Figure 3. tried to solve the problem of population by listing out state populations. This data was swiftly discounted as we highlighted that it works on the assumption that every state offers a driver's license to the same share of its population. 
+
+Figure 4. showcases the number of licenses issued by each state and prove to be the perfect metric to weigh the total number of death data with. This can be used to create a fatality proportion of the drivers of a state which is a first step towards answering our question on which state had the most dangerous traffic in 2012. 
